@@ -1,0 +1,28 @@
+name: Run tests
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions: read-all
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Install protoc dependency
+        uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
+        with:
+          version: '24.x'
+      - name: Build
+        run: |
+          cargo build --all-features --profile release
+      - name: Format
+        run: |
+          cargo fmt --check
+      - name: Run all tests
+        run: |
+          cargo test --all-features --profile release
