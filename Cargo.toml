@@ -7,7 +7,7 @@ description = "A cryptographically secure transparency log service for C2PA mani
 repository = "https://github.com/IntelLabs/atlas-transparency-log"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-keywords = ["c2pa", "transparency-log", "merkle-tree", "cryptography", "audit", "atlas"]
+keywords = ["c2pa", "transparency-log", "merkle-tree", "cryptography", "audit"]
 categories = ["cryptography", "web-programming::http-server", "authentication"]
 
 [package.metadata.docs.rs]
