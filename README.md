@@ -1,11 +1,11 @@
 ![GitHub License](https://img.shields.io/github/license/IntelLabs/atlas-transparency-log)
-[![Crates.io](https://img.shields.io/crates/v/atlas-cli.svg)](https://crates.io/crates/atlas-transparency-log)
-[![Documentation](https://docs.rs/atlas-cli/badge.svg)](https://docs.rs/atlas-transparency-log)
+[![Crates.io](https://img.shields.io/crates/v/atlas-transparency-log.svg)](https://crates.io/crates/atlas-transparency-log)
+[![Documentation](https://docs.rs/atlas-transparency-log/badge.svg)](https://docs.rs/atlas-transparency-log)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/IntelLabs/atlas-transparency-log/badge)](https://scorecard.dev/viewer/?uri=github.com/IntelLabs/atlas-transparency-log)
 
-# C2PA Transparency Log Service
+# Atlas Transparency Log Service
 
-A cryptographically secure, append-only storage system for Content Authenticity Initiative (C2PA) manifests with verifiable transparency log capabilities.
+A cryptographically secure, append-only storage system for manifests with verifiable transparency log capabilities. Originally designed for Content Authenticity Initiative (C2PA) manifests but supports any structured content requiring tamper-evident storage.
 
 ⚠️ **Disclaimer**: This project is currently in active development. The code is **not stable** and **not intended for use in production environments**. Interfaces, features, and behaviors are subject to change without notice.
 
@@ -30,14 +30,18 @@ A cryptographically secure, append-only storage system for Content Authenticity 
 - Rust 1.70+ 
 - MongoDB 4.0+
 - OpenSSL development libraries
+- Docker and Docker Compose (optional)
 
 ### Installation
 
+#### Option 1: Local Development
+
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd storage_service
+git clone https://github.com/IntelLabs/atlas-transparency-log.git
+cd atlas-transparency-log
 ```
+
 2. Build the project:
 ```bash
 cargo build --release
@@ -46,7 +50,7 @@ cargo build --release
 3. Set up environment variables:
 ```bash
 export MONGODB_URI="mongodb://localhost:27017"
-export DB_NAME="c2pa_manifests"
+export DB_NAME="atlas_manifests"
 export SERVER_HOST="0.0.0.0"
 export SERVER_PORT="8080"
 export KEY_PATH="transparency_log_key.pem"
@@ -55,6 +59,24 @@ export KEY_PATH="transparency_log_key.pem"
 4. Run the service:
 ```bash
 cargo run --release
+```
+
+#### Option 2: Docker Deployment
+
+1. Clone the repository:
+```bash
+git clone https://github.com/IntelLabs/atlas-transparency-log.git
+cd atlas-transparency-log
+```
+
+2. Build and run with Docker Compose:
+```bash
+docker-compose up -d
+```
+
+3. Check service health:
+```bash
+curl http://localhost:8080/merkle/root
 ```
 
 The service will start at `http://localhost:8080`.
@@ -177,10 +199,12 @@ cargo test test_atlas_common_integration
 ### Project Structure
 
 ```
-storage_service/
+atlas-transparency-log/
 ├── Cargo.toml               # Dependencies including atlas-common
 ├── README.md
 ├── ARCHITECTURE.md
+├── Dockerfile               # Docker container configuration
+├── compose.yml              # Multi-service deployment
 └── src/
     ├── main.rs              # HTTP server and API endpoints
     ├── tests.rs             # Integration tests
@@ -227,13 +251,26 @@ storage_service/
 
 ## Troubleshooting
 
+### Docker Issues
+
+```bash
+# Check container logs
+docker-compose logs atlas_service
+
+# Rebuild containers
+docker-compose build --no-cache
+
+# Check container health
+docker-compose ps
+```
+
 ### MongoDB Connection Failed
 ```bash
 # Check MongoDB is running
-sudo systemctl status mongod
+docker-compose logs mongodb
 
 # Verify connection string
-mongo mongodb://localhost:27017
+docker exec -it atlas_mongodb mongosh
 ```
 
 ### Key Generation Failed
@@ -253,12 +290,23 @@ curl -X POST http://localhost:8080/manifests/test \
   -d '{"test": "data"}'
 
 # Check logs for validation details
-tail -f /var/log/transparency_log.log
+docker-compose logs atlas_service
 ```
 
 ### Large Manifest Rejection
 - Default limit is 10MB
 - Adjust `MAX_MANIFEST_SIZE` in `main.rs` if needed
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
+| `DB_NAME` | Database name | `atlas_manifests` |
+| `SERVER_HOST` | Server bind address | `0.0.0.0` |
+| `SERVER_PORT` | Server port | `8080` |
+| `KEY_PATH` | Ed25519 private key file path | `transparency_log_key.pem` |
+| `RUST_LOG` | Logging level | `info` |
 
 ## Acknowledgments
 
