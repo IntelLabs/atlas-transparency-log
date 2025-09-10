@@ -11,8 +11,8 @@ mod tests {
     };
     use atlas_common::validation::{ensure_c2pa_urn, validate_manifest_id};
 
-    use crate::merkle_tree::{LogLeaf, MerkleTree};
-    use crate::sign_data;
+    use atlas_transparency_log::merkle_tree::{LogLeaf, MerkleTree};
+    use atlas_transparency_log::sign_data;
 
     // Helper function to hash a string using atlas-common
     fn hash_string(data: &str) -> String {
