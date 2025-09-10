@@ -8,29 +8,11 @@ use ring::signature::Ed25519KeyPair;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use atlas_common::hash::calculate_hash;
-use atlas_common::validation::validate_manifest_id;
-
-// Import merkle tree modules from local modules
-mod merkle_tree;
-
-use merkle_tree::{ConsistencyProof, InclusionProof, LogLeaf, MerkleProof, MerkleTree};
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum ContentFormat {
-    #[serde(rename = "json")]
-    JSON,
-    #[serde(rename = "cbor")]
-    CBOR,
-    #[serde(rename = "binary")]
-    Binary,
-}
-
-impl Default for ContentFormat {
-    fn default() -> Self {
-        ContentFormat::JSON
-    }
-}
+use atlas_transparency_log::{
+    detect_content_type, hash_binary, is_valid_manifest_id,
+    merkle_tree::{ConsistencyProof, InclusionProof, LogLeaf, MerkleProof, MerkleTree},
+    sign_data, ContentFormat,
+};
 
 #[derive(Clone)]
 struct AppState {
@@ -56,37 +38,6 @@ struct ManifestEntry {
     pub sequence_number: u64,
     pub hash: String,
     pub signature: String,
-}
-
-// Function to detect content type from request
-pub fn detect_content_type(req: &HttpRequest) -> ContentFormat {
-    if let Some(content_type) = req.headers().get(header::CONTENT_TYPE) {
-        match content_type.to_str() {
-            Ok(ct) => {
-                if ct.contains("application/cbor") {
-                    return ContentFormat::CBOR;
-                } else if ct.contains("application/octet-stream") {
-                    return ContentFormat::Binary;
-                }
-            }
-            Err(_) => {}
-        }
-    }
-    ContentFormat::JSON
-}
-
-pub fn hash_binary(data: &[u8]) -> String {
-    calculate_hash(data)
-}
-
-// Sign binary data
-pub fn sign_data(key_pair: &Ed25519KeyPair, data: &[u8]) -> String {
-    let signature = key_pair.sign(data);
-    STANDARD.encode(signature.as_ref())
-}
-
-fn is_valid_manifest_id(id: &str) -> bool {
-    validate_manifest_id(id).is_ok()
 }
 
 // Store manifest with content type support
