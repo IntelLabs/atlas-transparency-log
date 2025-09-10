@@ -1,14 +1,15 @@
 [package]
 name = "atlas-transparency-log"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Marcin Spoczynski <marcin.spoczynski@intel.com>", "Marcela Melara <marcela.melara@intel.com"]
 description = "A cryptographically secure transparency log service for C2PA manifests with Merkle tree proofs"
 repository = "https://github.com/IntelLabs/atlas-transparency-log"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 readme = "README.md"
 keywords = ["c2pa", "transparency-log", "merkle-tree", "cryptography", "audit"]
 categories = ["cryptography", "web-programming::http-server", "authentication"]
+documentation = "https://docs.rs/atlas-transparency-log" 
 
 [package.metadata.docs.rs]
 all-features = true
@@ -17,6 +18,10 @@ rustdoc-args = ["--cfg", "docsrs"]
 [[bin]]
 name = "atlas-transparency-log"
 path = "src/main.rs"
+
+[lib]
+name = "atlas_transparency_log"
+path = "src/lib.rs"
 
 [dependencies]
 atlas-common = { version = "0.1.0", features = ["hash", "c2pa", "validation"] }
