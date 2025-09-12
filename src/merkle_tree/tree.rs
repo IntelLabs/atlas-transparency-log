@@ -116,7 +116,7 @@ impl Default for MerkleTree {
 impl MerkleTree {
     /// Create a new empty Merkle tree
     pub fn new() -> Self {
-        Self::with_hasher(Arc::new(DefaultHasher))
+        Self::with_hasher(Arc::new(DefaultHasher::new()))
     }
 
     /// Create a new Merkle tree with a custom hasher
@@ -131,6 +131,14 @@ impl MerkleTree {
     /// Add a new leaf to the tree
     pub fn add_leaf(&mut self, leaf: LogLeaf) {
         self.leaves.push(leaf);
+        self.update_root_hash();
+    }
+
+    /// Add multiple leaves to the tree (simple wrapper for individual adds)
+    pub fn add_leaves(&mut self, leaves: Vec<LogLeaf>) {
+        for leaf in leaves {
+            self.leaves.push(leaf);
+        }
         self.update_root_hash();
     }
 
@@ -451,5 +459,15 @@ impl MerkleTree {
         self.leaves
             .iter()
             .find(|leaf| leaf.metadata.sequence_number == sequence_number)
+    }
+
+    /// Get hasher algorithm information
+    pub fn hasher_algorithm(&self) -> atlas_common::hash::HashAlgorithm {
+        self.hasher.algorithm()
+    }
+
+    /// Get hardware capabilities used by this tree
+    pub fn get_hardware_capabilities(&self) -> atlas_common::hash::HardwareCapabilities {
+        atlas_common::hash::get_hardware_capabilities()
     }
 }
