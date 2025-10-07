@@ -13,6 +13,9 @@ RUN apt-get update && \
 # Create non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
+# Create data directory and set ownership BEFORE switching to appuser
+RUN mkdir -p /data && chown -R appuser:appuser /data
+
 COPY --from=builder /usr/src/app/target/release/atlas-transparency-log /usr/local/bin/atlas-transparency-log
 RUN chmod +x /usr/local/bin/atlas-transparency-log
 
