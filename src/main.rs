@@ -27,17 +27,39 @@ struct ManifestEntry {
     pub id: Option<mongodb::bson::oid::ObjectId>,
     pub manifest_id: String,
     pub manifest_type: String,
+    #[serde(skip_serializing_if = "should_skip_metadata", default)]
     pub content_format: ContentFormat,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "manifest", skip_serializing_if = "Option::is_none")]
     pub manifest_json: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub manifest_cbor: Option<String>, // Base64 encoded CBOR
     #[serde(skip_serializing_if = "Option::is_none")]
     pub manifest_binary: Option<String>, // Base64 encoded binary
     pub created_at: DateTime<Utc>,
+    #[serde(skip_serializing_if = "should_skip_metadata", default)]
     pub sequence_number: u64,
+    #[serde(skip_serializing_if = "should_skip_metadata", default)]
     pub hash: String,
+    #[serde(skip_serializing_if = "should_skip_metadata", default)]
     pub signature: String,
+}
+
+// Thread-local flag for controlling metadata serialization
+thread_local! {
+    static INCLUDE_METADATA: std::cell::Cell<bool> = std::cell::Cell::new(false);
+}
+
+fn should_skip_metadata<T>(_: &T) -> bool {
+    !INCLUDE_METADATA.with(|f| f.get())
+}
+
+fn set_include_metadata(include: bool) {
+    INCLUDE_METADATA.with(|f| f.set(include));
+}
+
+#[derive(Debug, Deserialize)]
+struct GetManifestQuery {
+    include_metadata: Option<bool>,
 }
 
 // Store manifest with content type support
@@ -366,9 +388,14 @@ async fn get_manifest(
     state: web::Data<AppState>,
     req: HttpRequest,
     path: web::Path<String>,
+    query: web::Query<GetManifestQuery>,
 ) -> HttpResponse {
     let collection = state.db.collection::<ManifestEntry>("manifests");
     debug!("Searching for manifest with ID: {}", &*path);
+
+    // Set metadata inclusion flag based on query parameter
+    let include_metadata = query.include_metadata.unwrap_or(false);
+    set_include_metadata(include_metadata);
 
     match collection
         .find_one(mongodb::bson::doc! { "manifest_id": &*path }, None)
@@ -671,4 +698,96 @@ async fn main() -> std::io::Result<()> {
 
 // Include the test module
 #[cfg(test)]
-mod tests;
+mod tests {
+    use super::*;
+    use actix_web;
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use chrono::Utc;
+    use ring::signature::Ed25519KeyPair;
+
+    use atlas_common::hash::calculate_hash;
+
+    use atlas_transparency_log::merkle_tree::{LogLeaf, MerkleTree};
+    use atlas_transparency_log::sign_data;
+
+    // Helper function to hash a string using atlas-common
+    fn hash_string(data: &str) -> String {
+        calculate_hash(data.as_bytes())
+    }
+
+    #[actix_web::test]
+    async fn test_hashing() {
+        // Test hash consistency using atlas-common
+        let data = "test data";
+        let hash1 = hash_string(data);
+        let hash2 = hash_string(data);
+
+        // Same input should produce same hash
+        assert_eq!(hash1, hash2);
+
+        // Different inputs should produce different hashes
+        let hash3 = hash_string("different data");
+        assert_ne!(hash1, hash3);
+
+        // Test that we're using SHA384 (48 bytes = 96 hex chars)
+        let raw_hash = calculate_hash(data.as_bytes());
+        assert_eq!(raw_hash.len(), 96); // SHA384 produces 96 hex characters
+    }
+
+    #[actix_web::test]
+    async fn test_signing() {
+        // Generate a test key pair
+        let rng = ring::rand::SystemRandom::new();
+        let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rng).expect("Failed to generate key");
+        let key_pair =
+            Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref()).expect("Failed to parse key");
+
+        // Sign some data
+        let data = "test data";
+        let signature = sign_data(&key_pair, data.as_bytes());
+
+        // Signature should not be empty
+        assert!(!signature.is_empty());
+
+        // Ed25519 signatures are 64 bytes, which is 88 chars in base64 (including padding)
+        let decoded = STANDARD.decode(&signature).unwrap();
+        assert_eq!(decoded.len(), 64);
+    }
+
+    #[actix_web::test]
+    async fn test_manifest_serialization_with_metadata_flag() {
+        let now = Utc::now();
+
+        let entry = ManifestEntry {
+            id: None,
+            manifest_id: "test-id".to_string(),
+            manifest_type: "Dataset".to_string(),
+            content_format: ContentFormat::JSON,
+            manifest_json: Some(serde_json::json!({"test": "data"})),
+            manifest_cbor: None,
+            manifest_binary: None,
+            created_at: now,
+            sequence_number: 42,
+            hash: "test-hash".to_string(),
+            signature: "test-sig".to_string(),
+        };
+
+        // Test without metadata (default)
+        set_include_metadata(false);
+        let json_without = serde_json::to_value(&entry).unwrap();
+        assert!(json_without.get("sequence_number").is_none());
+        assert!(json_without.get("hash").is_none());
+        assert!(json_without.get("signature").is_none());
+        assert!(json_without.get("content_format").is_none());
+        assert!(json_without.get("manifest").is_some());
+
+        // Test with metadata
+        set_include_metadata(true);
+        let json_with = serde_json::to_value(&entry).unwrap();
+        assert_eq!(json_with.get("sequence_number").unwrap(), 42);
+        assert_eq!(json_with.get("hash").unwrap(), "test-hash");
+        assert_eq!(json_with.get("signature").unwrap(), "test-sig");
+        assert!(json_with.get("content_format").is_some());
+        assert!(json_with.get("manifest").is_some());
+    }
+}
