@@ -128,7 +128,7 @@ Stores the current state of the Merkle tree:
 **GET /manifests/{id}**
 - Retrieves manifest by ID
 - Query parameters:
-  - `include_metadata` (boolean, default: false): Include Merkle tree metadata
+  - `include_tlog_metadata` (boolean, default: false): Include Merkle tree metadata
 - Content negotiation based on Accept header
 - Returns appropriate format (JSON/CBOR/Binary)
 - Default response hides Merkle fields for backward compatibility
