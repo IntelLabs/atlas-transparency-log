@@ -43,7 +43,7 @@ By default, the API hides Merkle tree metadata fields for backward compatibility
   "created_at": DateTime
 }
 
-// GET /manifests/{id}?include_metadata=true response
+// GET /manifests/{id}?include_tlog_metadata=true response
 {
   "_id": ObjectId,
   "manifest_id": String,
