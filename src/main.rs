@@ -46,20 +46,20 @@ struct ManifestEntry {
 
 // Thread-local flag for controlling metadata serialization
 thread_local! {
-    static INCLUDE_METADATA: std::cell::Cell<bool> = std::cell::Cell::new(false);
+    static INCLUDE_TLOG_METADATA: std::cell::Cell<bool> = std::cell::Cell::new(false);
 }
 
 fn should_skip_metadata<T>(_: &T) -> bool {
-    !INCLUDE_METADATA.with(|f| f.get())
+    !INCLUDE_TLOG_METADATA.with(|f| f.get())
 }
 
-fn set_include_metadata(include: bool) {
-    INCLUDE_METADATA.with(|f| f.set(include));
+fn set_include_tlog_metadata(include: bool) {
+    INCLUDE_TLOG_METADATA.with(|f| f.set(include));
 }
 
 #[derive(Debug, Deserialize)]
 struct GetManifestQuery {
-    include_metadata: Option<bool>,
+    include_tlog_metadata: Option<bool>,
 }
 
 // Store manifest with content type support
@@ -394,8 +394,8 @@ async fn get_manifest(
     debug!("Searching for manifest with ID: {}", &*path);
 
     // Set metadata inclusion flag based on query parameter
-    let include_metadata = query.include_metadata.unwrap_or(false);
-    set_include_metadata(include_metadata);
+    let include_tlog_metadata = query.include_tlog_metadata.unwrap_or(false);
+    set_include_tlog_metadata(include_tlog_metadata);
 
     match collection
         .find_one(mongodb::bson::doc! { "manifest_id": &*path }, None)
@@ -773,7 +773,7 @@ mod tests {
         };
 
         // Test without metadata (default)
-        set_include_metadata(false);
+        set_include_tlog_metadata(false);
         let json_without = serde_json::to_value(&entry).unwrap();
         assert!(json_without.get("sequence_number").is_none());
         assert!(json_without.get("hash").is_none());
@@ -782,7 +782,7 @@ mod tests {
         assert!(json_without.get("manifest").is_some());
 
         // Test with metadata
-        set_include_metadata(true);
+        set_include_tlog_metadata(true);
         let json_with = serde_json::to_value(&entry).unwrap();
         assert_eq!(json_with.get("sequence_number").unwrap(), 42);
         assert_eq!(json_with.get("hash").unwrap(), "test-hash");
