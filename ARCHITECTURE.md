@@ -17,8 +17,8 @@ Stores the actual C2PA manifest data with the following schema:
 {
   "_id": ObjectId,                    // MongoDB document ID
   "manifest_id": String,              // Unique identifier for the manifest
-  "manifest_type": String,            // Type classification (e.g., "image", "video")
-  "content_format": String,           // Format: "JSON", "CBOR", or "Binary"
+  "manifest_type": String,            // Type classification (e.g., "Dataset", "Model")
+  "content_format": String,           // Format: "json", "cbor", or "binary"
   "manifest_json": Object,            // JSON manifest data (if applicable)
   "manifest_cbor": String,            // Base64-encoded CBOR data (if applicable)
   "manifest_binary": String,          // Base64-encoded binary data (if applicable)
@@ -26,6 +26,34 @@ Stores the actual C2PA manifest data with the following schema:
   "sequence_number": Number,          // Monotonically increasing sequence number
   "hash": String,                     // SHA384 hash of the raw manifest content
   "signature": String                 // Ed25519 signature of the hash
+}
+```
+
+**API Response Format:**
+
+By default, the API hides Merkle tree metadata fields for backward compatibility:
+
+```javascript
+// Default GET /manifests/{id} response
+{
+  "_id": ObjectId,
+  "manifest_id": String,
+  "manifest_type": String,
+  "manifest": Object, 
+  "created_at": DateTime
+}
+
+// GET /manifests/{id}?include_tlog_metadata=true response
+{
+  "_id": ObjectId,
+  "manifest_id": String,
+  "manifest_type": String,
+  "content_format": String, 
+  "manifest": Object,
+  "created_at": DateTime,
+  "sequence_number": Number, 
+  "hash": String, 
+  "signature": String 
 }
 ```
 
@@ -99,13 +127,20 @@ Stores the current state of the Merkle tree:
 
 **GET /manifests/{id}**
 - Retrieves manifest by ID
+- Query parameters:
+  - `include_tlog_metadata` (boolean, default: false): Include Merkle tree metadata
 - Content negotiation based on Accept header
 - Returns appropriate format (JSON/CBOR/Binary)
+- Default response hides Merkle fields for backward compatibility
 
 **GET /manifests**
 - Lists manifests with pagination
 - Query parameters: `limit`, `skip`, `manifest_type`, `format`
 - Sorted by sequence number
+
+**GET /types/{manifest_type}/manifests**
+- Lists manifests filtered by type
+- Query parameters: `limit`, `skip`
 
 #### Merkle Tree Operations
 
@@ -127,9 +162,18 @@ Stores the current state of the Merkle tree:
 - Verifies an inclusion proof
 - Validates proof against current tree state
 
+**GET /merkle/root**
+- Returns current Merkle root and tree size
+
+**GET /merkle/stats**
+- Returns tree statistics including depth and health
+
 **GET /merkle/consistency**
 - Generates consistency proof between tree sizes
 - Query parameters: `old_size`, `new_size`
+
+**POST /merkle/consistency/verify**
+- Verifies a consistency proof
 
 **GET /merkle/root/{size}**
 - Computes historical root for specific tree size
@@ -241,11 +285,11 @@ storage_service/
 ## Configuration
 
 Environment variables:
-- `MONGODB_URI`: MongoDB connection string
+- `MONGODB_URI`: MongoDB connection string (default: "mongodb://localhost:27017")
 - `DB_NAME`: Database name (default: "c2pa_manifests")
 - `SERVER_HOST`: Server bind address (default: "0.0.0.0")
 - `SERVER_PORT`: Server port (default: "8080")
-- `KEY_PATH`: Ed25519 key file path
+- `KEY_PATH`: Ed25519 key file path (default: "transparency_log_key.pem")
 
 ## Future Enhancements
 
