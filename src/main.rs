@@ -102,7 +102,10 @@ async fn store_manifest(
     let signature = sign_data(&state.key_pair, &content_hash.as_bytes());
 
     // Get next sequence number
-    let sequence_count = collection.count_documents(None, None).await.unwrap_or(0);
+    let sequence_count = collection
+        .count_documents(mongodb::bson::doc! {})
+        .await
+        .unwrap_or(0);
     let sequence_number = sequence_count + 1;
 
     let now = Utc::now();
@@ -192,7 +195,7 @@ async fn store_manifest(
         }
     }
 
-    match collection.insert_one(&entry, None).await {
+    match collection.insert_one(&entry).await {
         Ok(result) => {
             info!(
                 "Successfully stored manifest with ID: {}",
@@ -243,7 +246,7 @@ async fn persist_merkle_tree(
     let collection = db.collection::<serde_json::Value>("merkle_tree_state");
 
     // Clear existing tree state
-    collection.delete_many(mongodb::bson::doc! {}, None).await?;
+    collection.delete_many(mongodb::bson::doc! {}).await?;
 
     // Store the current tree state (leaves and metadata)
     // Note: Root hash is recomputed from leaves during load for integrity
@@ -254,14 +257,14 @@ async fn persist_merkle_tree(
         "updated_at": Utc::now(),
     });
 
-    collection.insert_one(tree_state, None).await?;
+    collection.insert_one(tree_state).await?;
     Ok(())
 }
 
 async fn load_merkle_tree(db: &Database) -> MerkleTree {
     let collection = db.collection::<serde_json::Value>("merkle_tree_state");
 
-    match collection.find_one(None, None).await {
+    match collection.find_one(mongodb::bson::doc! {}).await {
         Ok(Some(state)) => {
             if let Ok(leaves) = serde_json::from_value::<Vec<LogLeaf>>(state["leaves"].clone()) {
                 // Recompute root hash from leaves to ensure integrity
@@ -273,7 +276,7 @@ async fn load_merkle_tree(db: &Database) -> MerkleTree {
 
     // If no tree exists or error occurs, rebuild from manifests
     let manifests_collection = db.collection::<ManifestEntry>("manifests");
-    if let Ok(cursor) = manifests_collection.find(None, None).await {
+    if let Ok(cursor) = manifests_collection.find(mongodb::bson::doc! {}).await {
         if let Ok(manifests) = futures::stream::TryStreamExt::try_collect::<Vec<_>>(cursor).await {
             let mut tree = MerkleTree::new();
 
@@ -318,19 +321,19 @@ async fn list_manifests(state: web::Data<AppState>, query: web::Query<ListQuery>
         filter.insert("content_format", content_format);
     }
 
-    let find_options = mongodb::options::FindOptions::builder()
+    let filter_doc = if filter.is_empty() {
+        mongodb::bson::doc! {}
+    } else {
+        filter
+    };
+
+    match collection
+        .find(filter_doc)
         .sort(mongodb::bson::doc! { "sequence_number": 1 })
         .skip(skip)
         .limit(limit)
-        .build();
-
-    let filter_doc = if filter.is_empty() {
-        None
-    } else {
-        Some(filter)
-    };
-
-    match collection.find(filter_doc, find_options).await {
+        .await
+    {
         Ok(cursor) => match futures::stream::TryStreamExt::try_collect::<Vec<_>>(cursor).await {
             Ok(manifests) => HttpResponse::Ok().json(manifests),
             Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
@@ -368,13 +371,13 @@ async fn list_manifests_by_type(
 
     let filter = mongodb::bson::doc! { "manifest_type": manifest_type };
 
-    let find_options = mongodb::options::FindOptions::builder()
+    match collection
+        .find(filter)
         .sort(mongodb::bson::doc! { "sequence_number": 1 })
         .skip(skip)
         .limit(limit)
-        .build();
-
-    match collection.find(filter, find_options).await {
+        .await
+    {
         Ok(cursor) => match futures::stream::TryStreamExt::try_collect::<Vec<_>>(cursor).await {
             Ok(manifests) => HttpResponse::Ok().json(manifests),
             Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
@@ -398,7 +401,7 @@ async fn get_manifest(
     set_include_tlog_metadata(include_tlog_metadata);
 
     match collection
-        .find_one(mongodb::bson::doc! { "manifest_id": &*path }, None)
+        .find_one(mongodb::bson::doc! { "manifest_id": &*path })
         .await
     {
         Ok(Some(manifest)) => {
@@ -701,13 +704,12 @@ async fn main() -> std::io::Result<()> {
 mod tests {
     use super::*;
     use actix_web;
-    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use base64::engine::general_purpose::STANDARD;
     use chrono::Utc;
     use ring::signature::Ed25519KeyPair;
 
     use atlas_common::hash::calculate_hash;
 
-    use atlas_transparency_log::merkle_tree::{LogLeaf, MerkleTree};
     use atlas_transparency_log::sign_data;
 
     // Helper function to hash a string using atlas-common
